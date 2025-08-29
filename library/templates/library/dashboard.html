@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - SmartLib</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script>
+        (function () {
+            const stored = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = stored || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'dashboard' %}">SmartLib</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'book_list' %}">Book List</a>
+                    </li>
+                    {% if not request.user.is_staff %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'notifications' %}">Notifications{% if unread_notifications %}
+                            <span class="badge bg-light text-dark">{{ unread_notifications }}</span>{% endif %}</a>
+                    </li>
+                    {% endif %}
+                    {% if request.user.is_staff %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                            Manage Books
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'add_book' %}">Add Book</a></li>
+                            <li><a class="dropdown-item" href="{% url 'manage_books' %}">Edit/Delete Books</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                    {% if not request.user.is_staff %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'recommendations' %}">Recommendations</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="themeToggle" title="Toggle theme"
+                            aria-label="Toggle theme"><span id="themeIcon">🌙</span></a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="container mt-5">
+        {% csrf_token %}
+        <h1>Welcome to your Dashboard, {{ user.username }}!</h1>
+
+        <!-- Stats Cards -->
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Books</h5>
+                        <p class="display-4">{{ book_count }}</p>
+                    </div>
+                </div>
+            </div>
+
+
+            {% if not request.user.is_staff %}
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Books Issued</h5>
+                        <p class="display-4">{{ total_issued }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Overdue</h5>
+                        <p class="display-4 text-danger">{{ total_overdue }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+
+        <!-- Issued Books Section -->
+        {% if issued_books %}
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5>Your Issued Books</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Book</th>
+                                        <th>Issue Date</th>
+                                        <th>Due Date</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for issue in issued_books %}
+                                    <tr {% if issue.is_overdue %}class="table-danger" {% endif %}>
+                                        <td>{{ issue.book.title }}</td>
+                                        <td>{{ issue.issue_date|date:"M d, Y" }}</td>
+                                        <td>{{ issue.due_date|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% if issue.is_overdue %}
+                                            <span class="badge bg-danger">Overdue</span>
+                                            {% else %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-warning return-btn"
+                                                data-issue-id="{{ issue.id }}">
+                                                Return
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Available Books Section (Only for non-staff users) -->
+        {% if available_books and not request.user.is_staff %}
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5>Available Books to Issue</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for book in available_books %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ book.title }}</h6>
+                                        <p class="card-text text-muted">{{ book.author }}</p>
+                                        <button class="btn btn-sm btn-primary issue-btn" data-book-id="{{ book.id }}">
+                                            Issue Book
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-info text-white">Quick Actions</div>
+                    <div class="card-body">
+                        <p>Use the links below to manage your library:</p>
+                        <a href="{% url 'book_list' %}" class="btn btn-primary m-2">View All Books</a>
+
+                        {% if request.user.is_staff %}
+                        <a href="{% url 'add_book' %}" class="btn btn-success m-2">Add a New Book</a>
+                        {% endif %}
+
+                        {% if not request.user.is_staff %}
+                        <a href="{% url 'recommendations' %}" class="btn btn-info m-2">Get Recommendations</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Issue Book functionality
+        document.querySelectorAll('.issue-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const bookId = this.dataset.bookId;
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+                fetch(`/books/${bookId}/issue/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Book issued successfully!');
+                            location.reload();
+                        } else {
+                            alert(data.message);
+                        }
+                    });
+            });
+        });
+
+        // Return Book functionality
+        document.querySelectorAll('.return-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const issueId = this.dataset.issueId;
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+                fetch(`/issues/${issueId}/return/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Book returned successfully!');
+                            location.reload();
+                        } else {
+                            alert(data.message);
+                        }
+                    });
+            });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var toggle = document.getElementById('themeToggle');
+            if (toggle) {
+                var icon = document.getElementById('themeIcon');
+                var setIcon = function (theme) { icon.textContent = theme === 'dark' ? '☀️' : '🌙'; };
+                setIcon(document.documentElement.getAttribute('data-bs-theme'));
+                toggle.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var current = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+                    var next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-bs-theme', next);
+                    try { localStorage.setItem('theme', next); } catch (e) { }
+                    setIcon(next);
+                });
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
